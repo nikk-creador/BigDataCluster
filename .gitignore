@@ -1,0 +1,16 @@
+.env
+citibike_live.db
+citibike_live.db-shm
+citibike_live.db-wal
+wikimedia_live.db
+wikimedia_live.db-shm
+wikimedia_live.db-wal
+legacy_nyc311/*.db
+legacy_nyc311/*.db-shm
+legacy_nyc311/*.db-wal
+__pycache__/
+spark_data/checkpoint/
+spark_data/current_stations.json
+spark_data/latest_analytics.json
+spark_data/wikimedia/checkpoint/
+spark_data/wikimedia/latest_analytics.json

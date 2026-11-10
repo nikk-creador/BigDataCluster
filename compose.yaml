@@ -1,0 +1,115 @@
+services:
+  kafka:
+    image: apache/kafka:4.1.0
+    container_name: wikimedia-kafka
+    ports:
+      - "9092:9092"
+      - "9094:9094"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: INTERNAL://:9095,EXTERNAL://:9092,SPARK://:9094,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: "INTERNAL://kafka:9095,EXTERNAL://${KAFKA_ADVERTISED_HOST:-localhost}:9092,SPARK://${KAFKA_SPARK_ADVERTISED_HOST:-kafka}:9094"
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,SPARK:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9095 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  spark-master:
+    image: apache/spark:4.3.0-scala2.13-java17-python3-ubuntu
+    container_name: wikimedia-spark-master
+    hostname: spark-master
+    command:
+      - /opt/spark/bin/spark-class
+      - org.apache.spark.deploy.master.Master
+      - --host
+      - 0.0.0.0
+      - --port
+      - "7077"
+      - --webui-port
+      - "8080"
+    ports:
+      - "7077:7077"
+      - "8080:8080"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/json/', timeout=2).read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  spark-worker:
+    image: apache/spark:4.3.0-scala2.13-java17-python3-ubuntu
+    container_name: wikimedia-spark-worker
+    hostname: spark-worker
+    command:
+      - /opt/spark/bin/spark-class
+      - org.apache.spark.deploy.worker.Worker
+      - --host
+      - spark-worker
+      - --port
+      - "7078"
+      - --webui-port
+      - "8081"
+      - --cores
+      - "2"
+      - --memory
+      - 2g
+      - spark://spark-master:7077
+    ports:
+      - "8081:8081"
+    depends_on:
+      spark-master:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8081', timeout=2).read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  spark-analytics:
+    image: apache/spark:4.3.0-scala2.13-java17-python3-ubuntu
+    container_name: wikimedia-spark-analytics
+    command:
+      - bash
+      - /opt/spark-apps/run_wikimedia_analytics.sh
+    ports:
+      - "7080:7080"
+      - "7081:7081"
+    environment:
+      SPARK_CLUSTER_PUBLIC_HOST: ${SPARK_CLUSTER_PUBLIC_HOST:-spark-analytics}
+      SPARK_KAFKA_BOOTSTRAP_SERVERS: ${SPARK_KAFKA_BOOTSTRAP_SERVERS:-kafka:9095}
+      WIKIMEDIA_KAFKA_TOPIC: ${WIKIMEDIA_KAFKA_TOPIC:-wikimedia.recentchange.v1}
+      SPARK_ANALYTICS_OUTPUT_DIR: /opt/spark-data/wikimedia
+      SPARK_ANALYTICS_CHECKPOINT_DIR: /opt/spark-data/wikimedia/checkpoint
+      SPARK_MAX_CORES: ${SPARK_MAX_CORES:-12}
+    volumes:
+      - ./spark_wikimedia_analytics.py:/opt/spark-apps/spark_wikimedia_analytics.py:ro
+      - ./run_wikimedia_analytics.sh:/opt/spark-apps/run_wikimedia_analytics.sh:ro
+      - ./spark_data:/opt/spark-data
+    depends_on:
+      kafka:
+        condition: service_healthy
+      spark-master:
+        condition: service_healthy
+      spark-worker:
+        condition: service_healthy
+    restart: on-failure
+
+volumes:
+  kafka-data:
