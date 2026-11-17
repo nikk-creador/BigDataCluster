@@ -112,7 +112,9 @@ streamlit run app.py
 ```
 
 Open the Streamlit URL printed in the terminal (normally
-http://localhost:8501). The dashboard refreshes every five seconds.
+http://localhost:8501). The dashboard refreshes every five seconds by default.
+The live data area refreshes without reloading the page controls. Use the sidebar
+to pause it or choose a slower interval; event ingestion continues.
 
 ## Dashboard and the 8 Vs
 
@@ -136,7 +138,9 @@ articles, files, templates, and categories.
    events in SQLite. Spark Structured Streaming independently analyzes Kafka
    micro-batches and writes analytics reports.
 4. The dashboard reads SQLite for its event feed and metrics; it refreshes
-   every five seconds. Spark reports are displayed separately.
+   every five seconds by default. Use the sidebar to pause dashboard refreshes
+   or choose a slower interval; event ingestion continues. Spark reports are
+   displayed separately.
 
 **Variety** in this project means the mixture of event classifications,
 Wikimedia projects, page namespaces, revision measurements, and pipeline
@@ -157,12 +161,13 @@ quality/status data—not different formats of full article content.
 - **Volatility:** Age of the oldest/newest event in view and daily retained
   event volume.
 
-The sidebar filters both the live event table and analytics by wiki and time
-window. Velocity and variability use the pipeline's `received_at` timestamp
-(arrival time), while content analytics use Wikimedia's `occurred_at` event
-timestamp. This keeps live-rate charts accurate when source events arrive late.
-Charts have hover details and zoom where useful; the dashboard refreshes every
-five seconds.
+The sidebar filters the live feed and analytics by time window and includes
+all Wikimedia wikis. Velocity and variability use `received_at` (arrival time),
+while content analytics use `occurred_at` (event time). This keeps live-rate
+charts accurate when source events arrive late.
+Charts have hover details and zoom where useful. The dashboard refreshes every
+five seconds by default; pause or slow dashboard refreshes from the sidebar.
+Event ingestion continues while the display is paused.
 
 The Live edit feed shows page, project, change type, namespace, event time, and
 page-length change. The dashboard does not display or persist editor usernames
